@@ -44,6 +44,5 @@ export const notes={
  reports:{step:'Additional · report inquiry',items:[['missing','Report list / details query','กรอง employee/delegation/org และ status รวม pagination'],['ready','get_report_status','อ่าน raw report status / total / counts ได้ราย report'],['missing','Current approver query','ชื่อผู้อนุมัติและ approval trail ยังไม่มีใน status procedure ระดับ preview-routing ต้องยืนยัน']]},
  delete:{step:'Additional · delete draft',items:[['missing','delete_draft (proposed)','ตรวจสิทธิ์และสถานะล่าสุดก่อนลบ พร้อมจัดการ lines/attachments ตามวิธีที่ Oracle team ยืนยัน'],['missing','delete_draft_line (proposed)','ลบ line ที่บันทึกแล้วเฉพาะ Draft ตรวจสิทธิ์/สถานะล่าสุดและคำนวณยอด header ใหม่ใน transaction เดียวกัน; ยังต้องให้ Oracle team ยืนยัน operation'],['bot','Confirmation + refresh','ยืนยันก่อนลบ line หรือ report ทั้งฉบับ ลบทันทีแล้ว refresh ยอด/รายละเอียด; ไม่รองรับ update saved line']]}
 };
-notes.deleteWizard=notes.delete;
 export const money=n=>new Intl.NumberFormat('en-SG',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0);
 export const uid=()=>crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;

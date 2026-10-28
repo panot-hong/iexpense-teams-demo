@@ -1,4 +1,4 @@
-import {types,currencyChoices,money} from './data.js?v=5';
+import {types,currencyChoices,money} from './data.js?v=6';
 export const text=(value,extra={})=>({type:'TextBlock',text:value,wrap:true,...extra});
 export const title=value=>text(value,{size:'Medium',weight:'Bolder',spacing:'None'});
 export const caption=value=>text(value,{size:'Small',isSubtle:true});

@@ -1,5 +1,5 @@
-import {people,initialReports,notes,money,uid,sampleRates,hydrateLegacySampleReports} from './data.js?v=5';
-import {card,title,text,caption,input,choice,action,noInputAction,facts,receiptCard,welcomeCard,previewCard,savedLineSections} from './cards.js?v=5';
+import {people,initialReports,notes,money,uid,sampleRates,hydrateLegacySampleReports} from './data.js?v=6';
+import {card,title,text,caption,input,choice,action,noInputAction,facts,receiptCard,welcomeCard,previewCard,savedLineSections} from './cards.js?v=6';
 import {icon,mountIcons} from './icons.js';
 
 const $=s=>document.querySelector(s), log=$('#messages');
@@ -13,7 +13,7 @@ AdaptiveCards.AdaptiveCard.onProcessMarkdown=(source,result)=>{result.outputHtml
 const hostConfig=new AdaptiveCards.HostConfig({fontFamily:'Segoe UI, system-ui, sans-serif',supportsInteractivity:true,fontSizes:{small:11,default:13,medium:17,large:20,extraLarge:24},fontWeights:{lighter:400,default:400,bolder:600},spacing:{small:6,default:12,medium:17,large:22,extraLarge:28,padding:18},containerStyles:{default:{backgroundColor:'#FFFFFF',foregroundColors:{default:{default:'#242424',subtle:'#6B6B75'},accent:{default:'#5B5FC7',subtle:'#7377D0'},good:{default:'#23734D'},attention:{default:'#B42332'}}},emphasis:{backgroundColor:'#F5F5FA',foregroundColors:{default:{default:'#242424',subtle:'#6B6B75'}}}},actions:{maxActions:8,spacing:'Default',buttonSpacing:8,showCard:{actionMode:'inline',inlineTopMargin:14},actionsOrientation:'horizontal',actionAlignment:'left'},factSet:{title:{size:'Small',weight:'Default',color:'Default',isSubtle:true,wrap:true,maxWidth:170},value:{size:'Default',weight:'Bolder',color:'Default',wrap:true},spacing:6},separator:{lineThickness:1,lineColor:'#E6E6EB'}});
 mountIcons();
 const wizard=$('#expense-wizard');
-const wizardSteps=new Set(['context','drafts','setup','upload','receipt','preview','missing','deleteWizard']);
+const wizardSteps=new Set(['context','drafts','setup','upload','receipt','preview','missing']);
 let wizardEntry=null,wizardSuspended=false,returnFocus=null;
 function updateWizardTotal(proposed=null){
  const total=proposed??(state.baseTotal+state.lines.reduce((s,l)=>s+l.amount,0));
@@ -24,7 +24,7 @@ function updateWizardChrome(step){
  $('#wizard-title').textContent=state.report?.existingId?'Add expenses to '+state.report.existingId:'Prepare expense report';
  $('#wizard-subtitle').textContent=state.person?`${state.person.name} · Singapore · SGD${state.report?.purpose?' · '+state.report.purpose:''}`:'Singapore · SGD';
  document.querySelectorAll('.wizard-steps li').forEach(n=>{n.classList.toggle('current',+n.dataset.step===number);n.classList.toggle('completed',+n.dataset.step<number);if(+n.dataset.step===number)n.setAttribute('aria-current','step');else n.removeAttribute('aria-current');});
- $('#wizard-back').hidden=['context','receipt','missing','deleteWizard'].includes(step);
+ $('#wizard-back').hidden=['context','receipt','missing'].includes(step);
  $('#wizard-back').textContent=['receipt','missing'].includes(step)?'Cancel entry':'Back';
  const files=state.files.length?`<details class="wizard-files"><summary>Supporting files · ${state.files.length}</summary>${state.files.map(f=>`<div class="wizard-file">${icon('file')}<span>${escapeHtml(f.name)}</span><small>${f.sample?'Sample':'Browser only'}</small></div>`).join('')}</details>`:'';
  $('#wizard-attachment-list').innerHTML=['upload','receipt','preview'].includes(step)?files:'';
@@ -44,6 +44,7 @@ function beginWizard(){
  context();
 }
 function finishWizard(){
+ if(deleteDialog.open)deleteDialog.close();pendingDelete=null;
  if(wizard.open)wizard.close();wizardSuspended=false;wizardEntry=null;
  $('#wizard-card').replaceChildren();$('#wizard-actions').replaceChildren();setLeavePrompt(false);
  cards=cards.filter(c=>!c.inWizard);
@@ -117,30 +118,42 @@ function upload(){showCard(state.lines.length?'Add another receipt to this repor
 function newLine(overrides={}){return {id:uid(),merchant:'',date:'2026-10-21',currency:'SGD',originalAmount:0,amount:0,expenseType:'Transportation',justification:'',amountSource:'manual',receiptMissing:false,sample:false,...overrides};}
 function review(line,missing=false){showCard(missing?'Add an expense only if its original receipt is missing.':'Check the extracted details. You can edit the numbers, currency and other fields directly.',receiptCard(line,{missing}),missing?'missing':'receipt',line);}
 function preview(){if(!state.report){context();return;}showCard('Here’s your report so far. You can edit new items, add a receipt, or save the draft.',previewCard(state.report,state.lines,state.baseTotal),'preview');}
-function showReports(filter='all'){const accessible=reports.filter(r=>people.some(p=>p.id===r.claimant));const filtered=accessible.filter(r=>filter==='all'||r.status===filter);const body=[title('Expense reports'),caption('Reports you own or are authorised to prepare.'),choice('statusFilter','Status',[{title:'All reports',value:'all'},...['Draft','Pending approval','Approved'].map(s=>({title:s,value:s}))],filter)];for(const r of filtered){const person=people.find(p=>p.id===r.claimant);body.push({type:'Container',separator:true,spacing:'Medium',items:[text(r.purpose,{weight:'Bolder'}),caption(`${r.id} · ${person.name} · ${r.status}`),text('SGD '+money(r.total),{weight:'Bolder'}),{type:'ActionSet',actions:[noInputAction('View details','reportDetail',{reportId:r.id}),...(r.status==='Draft'?[noInputAction('Continue draft','openDraft',{reportId:r.id}),noInputAction('Delete','deleteAsk',{reportId:r.id})]:[])]}]});}if(!filtered.length)body.push(text('No reports match this filter.'));showCard('Here are the reports you can access.',card(body,[action('Apply filter','filterReports',{},true),noInputAction('New expense report','start')]),'reports');}
-function showReportDetail(id){const r=reports.find(r=>r.id===id);if(!r){showReports();return;}showCard('Here are the latest details for this report.',card([title(r.id),facts([['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],['Status',r.status],['Amount','SGD '+money(r.total)],['Lines',r.lines.length+(r.existingLines||0)],...(r.approver?[['Current approver / outcome',r.approver]]:[])]),...savedLineSections(r.lines,{heading:'Expense lines',unknownCount:r.existingLines||0,reportId:r.status==='Draft'?r.id:null}),caption(r.status==='Draft'?'This is a draft. Submit it in Oracle when ready.':'Read-only inquiry. Approval actions are outside this demo.')],[noInputAction('Back to reports','reports',{},true),...(r.status==='Draft'?[noInputAction('Continue draft','openDraft',{reportId:r.id}),noInputAction('Delete draft','deleteAsk',{reportId:r.id})]:[])]),'reports');}
+function showReports(filter='all'){const accessible=reports.filter(r=>people.some(p=>p.id===r.claimant));const filtered=accessible.filter(r=>filter==='all'||r.status===filter);const body=[title('Expense reports'),caption('Reports you own or are authorised to prepare.'),choice('statusFilter','Status',[{title:'All reports',value:'all'},...['Draft','Pending approval','Approved'].map(s=>({title:s,value:s}))],filter)];for(const r of filtered){const person=people.find(p=>p.id===r.claimant);body.push({type:'Container',separator:true,spacing:'Medium',items:[text(r.purpose,{weight:'Bolder'}),caption(`${r.id} · ${person.name} · ${r.status}`),text('SGD '+money(r.total),{weight:'Bolder'}),{type:'ActionSet',actions:[noInputAction('View details','reportDetail',{reportId:r.id}),...(r.status==='Draft'?[noInputAction('Continue draft','openDraft',{reportId:r.id})]:[])]}]});}if(!filtered.length)body.push(text('No reports match this filter.'));showCard('Here are the reports you can access.',card(body,[action('Apply filter','filterReports',{},true),noInputAction('New expense report','start')]),'reports');}
+function showReportDetail(id){const r=reports.find(r=>r.id===id);if(!r){showReports();return;}showCard('Here are the latest details for this report.',card([title(r.id),facts([['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],['Status',r.status],['Amount','SGD '+money(r.total)],['Lines',r.lines.length+(r.existingLines||0)],...(r.approver?[['Current approver / outcome',r.approver]]:[])]),...savedLineSections(r.lines,{heading:'Expense lines',unknownCount:r.existingLines||0}),caption(r.status==='Draft'?'This is a draft. Submit it in Oracle when ready.':'Read-only inquiry. Approval actions are outside this demo.')],[noInputAction('Back to reports','reports',{},true),...(r.status==='Draft'?[noInputAction('Continue draft','openDraft',{reportId:r.id})]:[])]),'reports');}
 // A confirmed deletion writes immediately, independently of any unsaved additions.
 let pendingDelete=null;
+const deleteDialog=document.createElement('dialog');
+deleteDialog.className='delete-confirm-dialog';deleteDialog.setAttribute('aria-labelledby','delete-confirm-title');deleteDialog.setAttribute('aria-describedby','delete-confirm-description');
+deleteDialog.innerHTML=`<h3 id="delete-confirm-title"></h3><div id="delete-confirm-details"></div><p id="delete-confirm-description"></p><p id="delete-confirm-unsaved"></p><div class="delete-confirm-actions"><button id="delete-confirm-cancel">Cancel</button><button id="delete-confirm-submit" class="prompt-danger">Delete</button></div>`;
+wizard.appendChild(deleteDialog);
+deleteDialog.addEventListener('cancel',e=>{e.preventDefault();e.stopPropagation();returnFromDelete();});
+$('#delete-confirm-cancel').onclick=returnFromDelete;
+$('#delete-confirm-submit').onclick=confirmDelete;
 function askDelete(reportId,lineId){
+ // All mutations start inside the draft wizard after its details are visible.
+ if(!wizard.open||state.report?.existingId!==reportId)return;
  const r=reports.find(r=>r.id===reportId&&r.status==='Draft');
  const line=lineId?r?.lines.find(l=>l.id===lineId):null;
  if(!r||(lineId&&!line)){toast('This draft or line is no longer available.');return;}
- pendingDelete={reportId,lineId,inWizard:wizard.open,returnStage:state.stage};
- showCard('Please confirm before deleting. This change is saved immediately.',card([
-  title(line?'Delete this expense line?':'Delete '+r.id+'?'),
-  facts([['Report',r.id],['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],...(line?[['Expense',line.merchant],['Line amount','SGD '+money(line.amount)],['Draft total after deletion','SGD '+money(r.total-line.amount)]]:[['Amount','SGD '+money(r.total)]])]),
-  text(line?'This removes the saved line. To change its values, add a new expense after deleting it.':'This removes the whole draft, including all its expense lines.',{color:'Attention'}),
-  ...(wizard.open&&state.lines.length?[caption('Your unsaved new items are kept when deleting a saved line. Deleting the whole draft also discards those new items.')]:[])
- ],[action(line?'Delete line':'Delete draft','deleteConfirm',{},false,{style:'destructive',associatedInputs:'none'}),noInputAction(line?'Keep line':'Keep draft','cancelDelete',{},true)]),wizard.open?'deleteWizard':'delete');
+ pendingDelete={reportId,lineId,returnStage:state.stage,scrollTop:$('#wizard-body').scrollTop};
+ $('#delete-confirm-title').textContent=line?'Delete this expense line?':'Delete '+r.id+'?';
+ const rows=[['Report',r.id],['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],...(line?[['Expense',line.merchant],['Line amount','SGD '+money(line.amount)],['Draft total after deletion','SGD '+money(r.total-line.amount)]]:[['Amount','SGD '+money(r.total)]])];
+ $('#delete-confirm-details').innerHTML='<dl>'+rows.map(([label,value])=>`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')+'</dl>';
+ $('#delete-confirm-description').textContent=line?'This removes the saved line immediately. To change its values, add a new expense after deleting it.':'This removes the whole draft, including all its expense lines, immediately.';
+ $('#delete-confirm-unsaved').textContent=state.lines.length?(line?'Your unsaved new items will be kept.':'Your unsaved new items will also be discarded.'):'';
+ $('#delete-confirm-submit').textContent=line?'Delete line':'Delete draft';
+ deleteDialog.showModal();$('#delete-confirm-cancel').focus();
 }
 function returnFromDelete(){
- const target=pendingDelete;pendingDelete=null;if(!target)return;
- if(target.inWizard){if(target.returnStage==='preview')preview();else{const r=reports.find(r=>r.id===target.reportId);if(r)showContinuedDraft(r);else{finishWizard();showReports();}}}
- else showReportDetail(target.reportId);
+ deleteDialog.close();pendingDelete=null;
+}
+function refreshAfterLineDelete(target,r){
+ if(target.returnStage==='preview')preview();else showContinuedDraft(r);
+ $('#wizard-body').scrollTop=target.scrollTop;
 }
 function confirmDelete(){
  if(!pendingDelete)return;
- const {reportId,lineId}=pendingDelete;
+ const target=pendingDelete;const {reportId,lineId}=target;
  const r=reports.find(r=>r.id===reportId&&r.status==='Draft');
  if(!r){pendingDelete=null;finishWizard();toast('This report is no longer a draft.');showReports();return;}
  if(lineId){
@@ -148,9 +161,9 @@ function confirmDelete(){
   if(!line){returnFromDelete();return;}
   r.lines=r.lines.filter(l=>l.id!==lineId);r.total=Math.round((r.total-line.amount)*100)/100;
   if(state.report?.existingId===r.id){state.report.savedLines=structuredClone(r.lines);state.baseTotal=r.total;}
-  persist();toast('Expense line deleted.');returnFromDelete();
+  persist();deleteDialog.close();pendingDelete=null;toast('Expense line deleted.');refreshAfterLineDelete(target,r);
  }else{
-  reports=reports.filter(item=>item.id!==r.id);persist();pendingDelete=null;
+  reports=reports.filter(item=>item.id!==r.id);persist();deleteDialog.close();pendingDelete=null;
   if(state.report?.existingId===r.id){finishWizard();state.report=null;state.lines=[];state.files=[];state.pendingFiles=[];state.baseTotal=0;sampleQueue=[];}
   toast(r.id+' deleted.');showReports();
  }
