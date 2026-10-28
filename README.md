@@ -10,7 +10,8 @@ Interactive Teams-style expense-report prototype for the Valeura Energy technica
 - Real Adaptive Cards inputs with editable values and recalculated SGD totals.
 - Self/delegated sample claimants, create or continue a draft.
 - Optional items without an original receipt, added from review.
-- Read-only saved expense lines in report details, continue draft and append preview.
+- Saved expense lines shown in report details, continue draft and append preview.
+- Draft-only deletion of a saved line or the whole report, with confirmation and immediate total/storage updates. Saved values cannot be edited; delete and add a replacement. New unsaved items remain editable.
 - Local draft save, report status, deletion and pause/resume within the current tab.
 - Optional technical notes for the integration review.
 

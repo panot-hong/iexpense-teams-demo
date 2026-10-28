@@ -1,4 +1,4 @@
-import {types,currencyChoices,money} from './data.js?v=4';
+import {types,currencyChoices,money} from './data.js?v=5';
 export const text=(value,extra={})=>({type:'TextBlock',text:value,wrap:true,...extra});
 export const title=value=>text(value,{size:'Medium',weight:'Bolder',spacing:'None'});
 export const caption=value=>text(value,{size:'Small',isSubtle:true});
@@ -27,8 +27,8 @@ export function receiptCard(line,{missing=false}={}){
  ],[action(missing?'Add item':'Confirm details','confirmLine',{lineId:line.id,missing},true),noInputAction('Cancel','cancelLine')]);
 }
 export function welcomeCard(){return card([title('Prepare an expense report'),text('Upload your receipts and I’ll help prepare your expense report.'),caption('I save drafts only. You review and submit them in Oracle iExpense.')],[action('Start an expense report','start',{},true),action('View reports','reports')]);}
-export function savedLineSections(lines,{heading='Saved expense lines',unknownCount=0}={}){
- const sections=[text(heading,{weight:'Bolder',spacing:'Medium',separator:true}),caption('Read only · These items are already saved. Only new items can be edited before saving.')];
+export function savedLineSections(lines,{heading='Saved expense lines',unknownCount=0,reportId=null}={}){
+ const sections=[text(heading,{weight:'Bolder',spacing:'Medium',separator:true}),caption(reportId?'Saved items cannot be edited. Delete an item and add a new one to replace it. Deletions are saved immediately.':'Read only · These items are already saved.')];
  lines.forEach((line,index)=>{
   const original=Number(line.originalAmount),claim=Number(line.amount);
   sections.push({type:'Container',separator:true,spacing:'Medium',items:[
@@ -39,7 +39,8 @@ export function savedLineSections(lines,{heading='Saved expense lines',unknownCo
     ['Original receipt missing',line.receiptMissing?'Yes':'No'],
     ...(line.receiptFileName?[['Receipt file',line.receiptFileName]]:[])
    ]),
-   text('Justification: '+(line.justification||'Not provided'),{size:'Small',isSubtle:true})
+   text('Justification: '+(line.justification||'Not provided'),{size:'Small',isSubtle:true}),
+   ...(reportId?[{type:'ActionSet',actions:[noInputAction('Delete line','deleteLineAsk',{reportId,lineId:line.id})]}]:[])
   ]});
  });
  if(unknownCount)sections.push(caption(`${unknownCount} older line(s) have no details available in this browser’s legacy demo data. Their amounts remain included in the saved total.`));
@@ -49,9 +50,9 @@ export function savedLineSections(lines,{heading='Saved expense lines',unknownCo
 export function previewCard(report,lines,baseTotal=0){
  const total=baseTotal+lines.reduce((s,l)=>s+Number(l.amount),0);
  const body=[title(report.existingId?'Review additional expenses':'Review your expense report'),facts([['Prepared for',report.person.name],['Purpose',report.purpose],['Template',report.template],['Cost center',report.person.costCenter+' · from employee default'],...(report.existingId?[['Existing draft',report.existingId],['Existing saved amount','SGD '+money(baseTotal)]]:[])])];
- if(report.existingId)body.push(...savedLineSections(report.savedLines||[],{heading:'Existing saved lines',unknownCount:report.unknownSavedCount||0}));
+ if(report.existingId)body.push(...savedLineSections(report.savedLines||[],{heading:'Existing saved lines',unknownCount:report.unknownSavedCount||0,reportId:report.existingId}));
  body.push(text('New expense lines',{weight:'Bolder',spacing:'Medium',separator:true}));
  for(const line of lines){body.push({type:'Container',separator:true,spacing:'Medium',items:[{type:'ColumnSet',columns:[{type:'Column',width:'stretch',items:[text(line.merchant,{weight:'Bolder',spacing:'None'}),caption(`${line.expenseType} · ${line.date}${line.receiptMissing?' · Original receipt missing':''}`)]},{type:'Column',width:'auto',items:[text('SGD '+money(line.amount),{weight:'Bolder',horizontalAlignment:'Right'})]}]},caption(line.currency!=='SGD'?`${line.currency} ${money(line.originalAmount)} · Effective rate ${(line.amount/line.originalAmount).toFixed(6).replace(/0+$/,'').replace(/\.$/,'')} SGD/${line.currency}`:'Receipt and claim are in SGD'),{type:'ActionSet',actions:[noInputAction('Edit','editLine',{lineId:line.id}),noInputAction('Remove','removeLine',{lineId:line.id})]}]});}
  body.push({type:'Container',separator:true,spacing:'Medium',items:[facts([['Total draft amount','SGD '+money(total)]]),caption('Save as draft. Review and submit later in Oracle.')]});
- return card(body,[action(report.existingId?'Save additional lines':'Save draft','save',{},true,{isEnabled:lines.length>0}),noInputAction('Add receipt','upload'),noInputAction('Add item without a receipt','addMissing')]);
+ return card(body,[action(report.existingId?'Save additional lines':'Save draft','save',{},true,{isEnabled:lines.length>0}),noInputAction('Add receipt','upload'),noInputAction('Add item without a receipt','addMissing'),...(report.existingId?[noInputAction('Delete draft','deleteAsk',{reportId:report.existingId})]:[])]);
 }

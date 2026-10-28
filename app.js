@@ -1,5 +1,5 @@
-import {people,initialReports,notes,money,uid,sampleRates,hydrateLegacySampleReports} from './data.js?v=4';
-import {card,title,text,caption,input,choice,action,noInputAction,facts,receiptCard,welcomeCard,previewCard,savedLineSections} from './cards.js?v=4';
+import {people,initialReports,notes,money,uid,sampleRates,hydrateLegacySampleReports} from './data.js?v=5';
+import {card,title,text,caption,input,choice,action,noInputAction,facts,receiptCard,welcomeCard,previewCard,savedLineSections} from './cards.js?v=5';
 import {icon,mountIcons} from './icons.js';
 
 const $=s=>document.querySelector(s), log=$('#messages');
@@ -13,7 +13,7 @@ AdaptiveCards.AdaptiveCard.onProcessMarkdown=(source,result)=>{result.outputHtml
 const hostConfig=new AdaptiveCards.HostConfig({fontFamily:'Segoe UI, system-ui, sans-serif',supportsInteractivity:true,fontSizes:{small:11,default:13,medium:17,large:20,extraLarge:24},fontWeights:{lighter:400,default:400,bolder:600},spacing:{small:6,default:12,medium:17,large:22,extraLarge:28,padding:18},containerStyles:{default:{backgroundColor:'#FFFFFF',foregroundColors:{default:{default:'#242424',subtle:'#6B6B75'},accent:{default:'#5B5FC7',subtle:'#7377D0'},good:{default:'#23734D'},attention:{default:'#B42332'}}},emphasis:{backgroundColor:'#F5F5FA',foregroundColors:{default:{default:'#242424',subtle:'#6B6B75'}}}},actions:{maxActions:8,spacing:'Default',buttonSpacing:8,showCard:{actionMode:'inline',inlineTopMargin:14},actionsOrientation:'horizontal',actionAlignment:'left'},factSet:{title:{size:'Small',weight:'Default',color:'Default',isSubtle:true,wrap:true,maxWidth:170},value:{size:'Default',weight:'Bolder',color:'Default',wrap:true},spacing:6},separator:{lineThickness:1,lineColor:'#E6E6EB'}});
 mountIcons();
 const wizard=$('#expense-wizard');
-const wizardSteps=new Set(['context','drafts','setup','upload','receipt','preview','missing']);
+const wizardSteps=new Set(['context','drafts','setup','upload','receipt','preview','missing','deleteWizard']);
 let wizardEntry=null,wizardSuspended=false,returnFocus=null;
 function updateWizardTotal(proposed=null){
  const total=proposed??(state.baseTotal+state.lines.reduce((s,l)=>s+l.amount,0));
@@ -24,7 +24,7 @@ function updateWizardChrome(step){
  $('#wizard-title').textContent=state.report?.existingId?'Add expenses to '+state.report.existingId:'Prepare expense report';
  $('#wizard-subtitle').textContent=state.person?`${state.person.name} · Singapore · SGD${state.report?.purpose?' · '+state.report.purpose:''}`:'Singapore · SGD';
  document.querySelectorAll('.wizard-steps li').forEach(n=>{n.classList.toggle('current',+n.dataset.step===number);n.classList.toggle('completed',+n.dataset.step<number);if(+n.dataset.step===number)n.setAttribute('aria-current','step');else n.removeAttribute('aria-current');});
- $('#wizard-back').hidden=['context','receipt','missing'].includes(step);
+ $('#wizard-back').hidden=['context','receipt','missing','deleteWizard'].includes(step);
  $('#wizard-back').textContent=['receipt','missing'].includes(step)?'Cancel entry':'Back';
  const files=state.files.length?`<details class="wizard-files"><summary>Supporting files · ${state.files.length}</summary>${state.files.map(f=>`<div class="wizard-file">${icon('file')}<span>${escapeHtml(f.name)}</span><small>${f.sample?'Sample':'Browser only'}</small></div>`).join('')}</details>`:'';
  $('#wizard-attachment-list').innerHTML=['upload','receipt','preview'].includes(step)?files:'';
@@ -107,7 +107,7 @@ ac.onExecuteAction=a=>{if(entry.archived)return;try{handleAction(a.data||{},entr
 function showError(entry,message){let e=entry.host.querySelector('.message-error');if(!e){e=document.createElement('div');e.className='message-error';entry.host.prepend(e);}e.textContent=message;}
 function setStep(step){state.stage=step;const n=notes[step]||notes.welcome;$('#tech-content').innerHTML=`<div class="tech-step">${escapeHtml(n.step)}</div>`+n.items.map(([status,heading,body])=>`<div class="tech-item"><div class="status ${status}">${{ready:'มีแล้วใน source',partial:'มีบางส่วน / ต้องแก้',missing:'ต้องเพิ่ม query / operation',bot:'งาน Bot / API'}[status]}</div><h3>${escapeHtml(heading)}</h3><p>${escapeHtml(body)}</p></div>`).join('');$('#wizard-tech-content').innerHTML=$('#tech-content').innerHTML;$('#claim-context').textContent=state.person?` · Preparing for ${state.person.name}`:'';}
 function context(){showCard('Who is this expense report for?',card([title('Prepare an expense report'),choice('person','Prepare report for',people.map(p=>({title:p.name+(p.delegated?' · delegated to you':' · myself'),value:p.id})),state.person?.id||'sarah'),choice('responsibility','Oracle responsibility',[{title:'SG iExpense Employee',value:'sg'}],'sg'),caption('Singapore · SGD. The employee’s default cost center is filled automatically.')],[action('Continue','context',{},true),noInputAction('Cancel','pauseWizard')]),'context');}
-function chooseDraft(backToContext=false){const list=reports.filter(r=>r.claimant===state.person.id&&r.status==='Draft').slice(0,10);if(!list.length){if(backToContext)context();else setup();return;}showCard(`You can create a new report or add receipts to ${state.person.name.split(' ')[0]}’s existing draft.`,card([title('New report or existing draft?'),choice('draftId','Latest drafts',list.map(r=>({title:`${r.id} · ${r.purpose} · SGD ${money(r.total)}`,value:r.id})),list[0].id),caption('Existing report owner and template stay unchanged. You can add new lines only.')],[noInputAction('Create new report','new',{},true),action('Continue selected draft','continueDraft')]),'drafts');}
+function chooseDraft(backToContext=false){const list=reports.filter(r=>r.claimant===state.person.id&&r.status==='Draft').slice(0,10);if(!list.length){if(backToContext)context();else setup();return;}showCard(`You can create a new report or add receipts to ${state.person.name.split(' ')[0]}’s existing draft.`,card([title('New report or existing draft?'),choice('draftId','Latest drafts',list.map(r=>({title:`${r.id} · ${r.purpose} · SGD ${money(r.total)}`,value:r.id})),list[0].id),caption('Existing report owner and template stay unchanged. You can add new lines or delete saved lines. Saved values cannot be edited.')],[noInputAction('Create new report','new',{},true),action('Continue selected draft','continueDraft')]),'drafts');}
 function setup(){
  const template=choice('template','Expense template',['Non HR — Trip Expenses','Non HR — Other Expenses'],state.report?.template||'Non HR — Trip Expenses');
  if(state.lines.length)template.isEnabled=false;
@@ -118,8 +118,47 @@ function newLine(overrides={}){return {id:uid(),merchant:'',date:'2026-10-21',cu
 function review(line,missing=false){showCard(missing?'Add an expense only if its original receipt is missing.':'Check the extracted details. You can edit the numbers, currency and other fields directly.',receiptCard(line,{missing}),missing?'missing':'receipt',line);}
 function preview(){if(!state.report){context();return;}showCard('Here’s your report so far. You can edit new items, add a receipt, or save the draft.',previewCard(state.report,state.lines,state.baseTotal),'preview');}
 function showReports(filter='all'){const accessible=reports.filter(r=>people.some(p=>p.id===r.claimant));const filtered=accessible.filter(r=>filter==='all'||r.status===filter);const body=[title('Expense reports'),caption('Reports you own or are authorised to prepare.'),choice('statusFilter','Status',[{title:'All reports',value:'all'},...['Draft','Pending approval','Approved'].map(s=>({title:s,value:s}))],filter)];for(const r of filtered){const person=people.find(p=>p.id===r.claimant);body.push({type:'Container',separator:true,spacing:'Medium',items:[text(r.purpose,{weight:'Bolder'}),caption(`${r.id} · ${person.name} · ${r.status}`),text('SGD '+money(r.total),{weight:'Bolder'}),{type:'ActionSet',actions:[noInputAction('View details','reportDetail',{reportId:r.id}),...(r.status==='Draft'?[noInputAction('Continue draft','openDraft',{reportId:r.id}),noInputAction('Delete','deleteAsk',{reportId:r.id})]:[])]}]});}if(!filtered.length)body.push(text('No reports match this filter.'));showCard('Here are the reports you can access.',card(body,[action('Apply filter','filterReports',{},true),noInputAction('New expense report','start')]),'reports');}
-function showReportDetail(id){const r=reports.find(r=>r.id===id);if(!r){showReports();return;}showCard('Here are the latest details for this report.',card([title(r.id),facts([['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],['Status',r.status],['Amount','SGD '+money(r.total)],['Lines',r.lines.length+(r.existingLines||0)],...(r.approver?[['Current approver / outcome',r.approver]]:[])]),...savedLineSections(r.lines,{heading:'Expense lines',unknownCount:r.existingLines||0}),caption(r.status==='Draft'?'This is a draft. Submit it in Oracle when ready.':'Read-only inquiry. Approval actions are outside this demo.')],[noInputAction('Back to reports','reports',{},true),...(r.status==='Draft'?[noInputAction('Continue draft','openDraft',{reportId:r.id}),noInputAction('Delete draft','deleteAsk',{reportId:r.id})]:[])]),'reports');}
-function startDraft(r){state.person=people.find(p=>p.id===r.claimant);state.report={person:state.person,purpose:r.purpose,template:r.template,trip:r.trip,existingId:r.id,savedLines:structuredClone(r.lines),unknownSavedCount:r.existingLines||0};state.baseTotal=r.total;state.lines=[];state.files=[];user(`Continue ${r.id}`);showCard(`We’ll add new items to ${r.id}. Existing lines and the template will stay unchanged.`,card([title('Continue existing draft'),facts([['Prepared for',state.person.name],['Purpose',r.purpose],['Saved amount','SGD '+money(r.total)]]),...savedLineSections(r.lines,{heading:'Existing saved lines',unknownCount:r.existingLines||0}),caption('Add new receipts below. Existing lines cannot be edited in the bot.')],[noInputAction('Add receipts','upload',{},true),noInputAction('Choose different draft','chooseDraft')]),'drafts');}
+function showReportDetail(id){const r=reports.find(r=>r.id===id);if(!r){showReports();return;}showCard('Here are the latest details for this report.',card([title(r.id),facts([['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],['Status',r.status],['Amount','SGD '+money(r.total)],['Lines',r.lines.length+(r.existingLines||0)],...(r.approver?[['Current approver / outcome',r.approver]]:[])]),...savedLineSections(r.lines,{heading:'Expense lines',unknownCount:r.existingLines||0,reportId:r.status==='Draft'?r.id:null}),caption(r.status==='Draft'?'This is a draft. Submit it in Oracle when ready.':'Read-only inquiry. Approval actions are outside this demo.')],[noInputAction('Back to reports','reports',{},true),...(r.status==='Draft'?[noInputAction('Continue draft','openDraft',{reportId:r.id}),noInputAction('Delete draft','deleteAsk',{reportId:r.id})]:[])]),'reports');}
+// A confirmed deletion writes immediately, independently of any unsaved additions.
+let pendingDelete=null;
+function askDelete(reportId,lineId){
+ const r=reports.find(r=>r.id===reportId&&r.status==='Draft');
+ const line=lineId?r?.lines.find(l=>l.id===lineId):null;
+ if(!r||(lineId&&!line)){toast('This draft or line is no longer available.');return;}
+ pendingDelete={reportId,lineId,inWizard:wizard.open,returnStage:state.stage};
+ showCard('Please confirm before deleting. This change is saved immediately.',card([
+  title(line?'Delete this expense line?':'Delete '+r.id+'?'),
+  facts([['Report',r.id],['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],...(line?[['Expense',line.merchant],['Line amount','SGD '+money(line.amount)],['Draft total after deletion','SGD '+money(r.total-line.amount)]]:[['Amount','SGD '+money(r.total)]])]),
+  text(line?'This removes the saved line. To change its values, add a new expense after deleting it.':'This removes the whole draft, including all its expense lines.',{color:'Attention'}),
+  ...(wizard.open&&state.lines.length?[caption('Your unsaved new items are kept when deleting a saved line. Deleting the whole draft also discards those new items.')]:[])
+ ],[action(line?'Delete line':'Delete draft','deleteConfirm',{},false,{style:'destructive',associatedInputs:'none'}),noInputAction(line?'Keep line':'Keep draft','cancelDelete',{},true)]),wizard.open?'deleteWizard':'delete');
+}
+function returnFromDelete(){
+ const target=pendingDelete;pendingDelete=null;if(!target)return;
+ if(target.inWizard){if(target.returnStage==='preview')preview();else{const r=reports.find(r=>r.id===target.reportId);if(r)showContinuedDraft(r);else{finishWizard();showReports();}}}
+ else showReportDetail(target.reportId);
+}
+function confirmDelete(){
+ if(!pendingDelete)return;
+ const {reportId,lineId}=pendingDelete;
+ const r=reports.find(r=>r.id===reportId&&r.status==='Draft');
+ if(!r){pendingDelete=null;finishWizard();toast('This report is no longer a draft.');showReports();return;}
+ if(lineId){
+  const line=r.lines.find(l=>l.id===lineId);
+  if(!line){returnFromDelete();return;}
+  r.lines=r.lines.filter(l=>l.id!==lineId);r.total=Math.round((r.total-line.amount)*100)/100;
+  if(state.report?.existingId===r.id){state.report.savedLines=structuredClone(r.lines);state.baseTotal=r.total;}
+  persist();toast('Expense line deleted.');returnFromDelete();
+ }else{
+  reports=reports.filter(item=>item.id!==r.id);persist();pendingDelete=null;
+  if(state.report?.existingId===r.id){finishWizard();state.report=null;state.lines=[];state.files=[];state.pendingFiles=[];state.baseTotal=0;sampleQueue=[];}
+  toast(r.id+' deleted.');showReports();
+ }
+}
+function showContinuedDraft(r){
+ showCard(`You can add new items to ${r.id}, or delete saved lines. The template stays unchanged.`,card([title('Continue existing draft'),facts([['Prepared for',state.person.name],['Purpose',r.purpose],['Saved amount','SGD '+money(r.total)]]),...savedLineSections(r.lines,{heading:'Existing saved lines',unknownCount:r.existingLines||0,reportId:r.id}),caption('Saved line values cannot be edited. Delete a line and add a new one to replace it.')],[noInputAction('Add receipts','upload',{},true),noInputAction('Choose different draft','chooseDraft'),noInputAction('Delete draft','deleteAsk',{reportId:r.id})]),'drafts');
+}
+function startDraft(r){state.person=people.find(p=>p.id===r.claimant);state.report={person:state.person,purpose:r.purpose,template:r.template,trip:r.trip,existingId:r.id,savedLines:structuredClone(r.lines),unknownSavedCount:r.existingLines||0};state.baseTotal=r.total;state.lines=[];state.files=[];showContinuedDraft(r);}
 function save(){if(!state.report||!state.lines.length){toast('Add at least one expense before saving.');return;}const report=state.report;let total=state.lines.reduce((s,l)=>s+l.amount,0);let saved;if(report.existingId){saved=reports.find(r=>r.id===report.existingId);if(!saved||saved.status!=='Draft'){toast('This report is no longer a draft. Refresh the report list.');showReports();return;}saved.lines.push(...structuredClone(state.lines));saved.total=Math.round((saved.total+total)*100)/100;saved.files.push(...state.files.map(f=>({name:f.name,sample:!!f.sample})));}else{const seq=Math.max(1042,...reports.map(r=>Number(r.id.match(/(\d+)$/)?.[1])||0))+1;saved={id:'ER-DEMO-'+seq,claimant:state.person.id,purpose:report.purpose,template:report.template,trip:report.trip,status:'Draft',total:Math.round(total*100)/100,existingLines:0,lines:structuredClone(state.lines),files:state.files.map(f=>({name:f.name,sample:!!f.sample}))};reports.unshift(saved);}state.lastSaved=saved.id;persist();user(report.existingId?'Save additional lines':'Save draft');showCard(report.existingId?'Your new lines have been added to the existing draft.':'Your expense report draft is ready.',card([title('Draft saved'),text(saved.id,{color:'Good',weight:'Bolder'}),facts([['Prepared for',state.person.name],['Total','SGD '+money(saved.total)],['Status','Draft'],['Lines',saved.lines.length+(saved.existingLines||0)],['Supporting files',saved.files.length]]),text('Review and submit your report in Oracle iExpense.'),caption('Demo result saved in this browser only. No data was sent to Oracle.')],[noInputAction('View reports','reports',{},true),noInputAction('Start another report','start')]),'saved');state.report=null;state.lines=[];state.baseTotal=0;state.files=[];}
 let sampleQueue=[];
 function sample(){state.files.push({name:'receipts-photo.jpg',sample:true},{name:'card-statement.pdf',sample:true});user('Use sample receipts and card statement',[{name:'receipts-photo.jpg',sample:true},{name:'card-statement.pdf',sample:true}]);sampleQueue=[newLine({merchant:'Grand Hotel',date:'2026-10-20',currency:'USD',originalAmount:100,amount:135.20,expenseType:'Accommodation',justification:'Jakarta client meeting',amountSource:'statement',sample:true}),newLine({merchant:'Airport Taxi',originalAmount:28.80,amount:28.80,expenseType:'Transportation',justification:'Airport transfer',amountSource:'manual',sample:true})];review(sampleQueue.shift());}
@@ -150,8 +189,10 @@ function handleAction(d,entry){switch(d.verb){
  case 'filterReports':showReports(d.statusFilter);break;
  case 'reportDetail':showReportDetail(d.reportId);break;
  case 'openDraft':{const r=reports.find(r=>r.id===d.reportId&&r.status==='Draft');if(r)startDraft(r);break;}
- case 'deleteAsk':{const r=reports.find(r=>r.id===d.reportId&&r.status==='Draft');if(!r)return;showCard('Please confirm before deleting this draft.',card([title('Delete '+r.id+'?'),facts([['Purpose',r.purpose],['Prepared for',people.find(p=>p.id===r.claimant).name],['Amount','SGD '+money(r.total)]]),text('This removes the whole draft, including its expense items.',{color:'Attention'})],[action('Delete draft','deleteConfirm',{reportId:r.id},false,{style:'destructive'}),noInputAction('Keep draft','reports',{},true)]),'delete');break;}
- case 'deleteConfirm':{const r=reports.find(r=>r.id===d.reportId&&r.status==='Draft');if(!r)return;reports=reports.filter(r=>r.id!==d.reportId);persist();user('Delete '+d.reportId);bot(d.reportId+' was deleted from the demo.');if(state.report?.existingId===r.id){state.report=null;state.lines=[];state.baseTotal=0;}showReports();break;}
+ case 'deleteAsk':askDelete(d.reportId,null);break;
+ case 'deleteLineAsk':askDelete(d.reportId,d.lineId);break;
+ case 'cancelDelete':returnFromDelete();break;
+ case 'deleteConfirm':confirmDelete();break;
  default:toast('This action is not part of the demo.');
 }}
 function send(){const box=$('#message-input'),message=box.value.trim();if(!message)return;box.value='';user(message,[],true);if(/report|status|claim history|รายการ|สถานะ/i.test(message)&&!/new|start|create|ทำ|สร้าง/i.test(message)){showReports();return;}if(/receipt|upload|ใบเสร็จ/i.test(message)&&state.report){upload();return;}if(/preview|confirm|summary|สรุป/i.test(message)&&state.report){preview();return;}if(/new|start|create|expense|claim|เบิก|เริ่ม|สร้าง/i.test(message)){beginWizard();return;}showCard('Try “start an expense report”, “show reports”, or attach a receipt. This demo uses guided responses; it is not connected to an AI service.',welcomeCard(),'welcome');}
